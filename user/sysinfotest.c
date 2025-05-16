@@ -3,130 +3,148 @@
 #include "kernel/sysinfo.h"
 #include "user/user.h"
 
+#define ERROR_CODE ((uint64)-1)
 
-void
-sinfo(struct sysinfo *info) {
-  if (sysinfo(info) < 0) {
-    printf("FAIL: sysinfo failed");
-    exit(1);
-  }
-}
-
-//
-// use sbrk() to count how many free physical memory pages there are.
-//
-int
-countfree()
+void sinfo(struct sysinfo* info)
 {
-  uint64 sz0 = (uint64)sbrk(0);
-  struct sysinfo info;
-  int n = 0;
-
-  while(1){
-    if((uint64)sbrk(PGSIZE) == 0xffffffffffffffff){
-      break;
+    if(sysinfo(info) < 0)
+    {
+        printf("FAIL: SYSINFO FAILED\n");
+        exit(1);
     }
-    n += PGSIZE;
-  }
-  sinfo(&info);
-  if (info.freemem != 0) {
-    printf("FAIL: there is no free mem, but sysinfo.freemem=%d\n",
-      info.freemem);
-    exit(1);
-  }
-  sbrk(-((uint64)sbrk(0) - sz0));
-  return n;
 }
 
-void
-testmem() {
-  struct sysinfo info;
-  uint64 n = countfree();
-  
-  sinfo(&info);
-
-  if (info.freemem!= n) {
-    printf("FAIL: free mem %d (bytes) instead of %d\n", info.freemem, n);
-    exit(1);
-  }
-  
-  if((uint64)sbrk(PGSIZE) == 0xffffffffffffffff){
-    printf("sbrk failed");
-    exit(1);
-  }
-
-  sinfo(&info);
+uint64 countfree()
+{
+    uint sz0 = (uint64)sbrk(0);
+    struct sysinfo info; // like a rice box, kernel will put rice in here
     
-  if (info.freemem != n-PGSIZE) {
-    printf("FAIL: free mem %d (bytes) instead of %d\n", n-PGSIZE, info.freemem);
-    exit(1);
-  }
-  
-  if((uint64)sbrk(-PGSIZE) == 0xffffffffffffffff){
-    printf("sbrk failed");
-    exit(1);
-  }
+    uint count = 0;
 
-  sinfo(&info);
+    while(1)
+    {
+        if((uint64)sbrk(PGSIZE) == ERROR_CODE) // infinite loop, until kernel say no
+        {
+            break;
+        }
+        count++;
+    }
     
-  if (info.freemem != n) {
-    printf("FAIL: free mem %d (bytes) instead of %d\n", n, info.freemem);
-    exit(1);
-  }
-}
-
-void
-testcall() {
-  struct sysinfo info;
-  
-  if (sysinfo(&info) < 0) {
-    printf("FAIL: sysinfo failed\n");
-    exit(1);
-  }
-
-  if (sysinfo((struct sysinfo *) 0xeaeb0b5b00002f5e) !=  0xffffffffffffffff) {
-    printf("FAIL: sysinfo succeeded with bad argument\n");
-    exit(1);
-  }
-}
-
-void testproc() {
-  struct sysinfo info;
-  uint64 nproc;
-  int status;
-  int pid;
-  
-  sinfo(&info);
-  nproc = info.nproc;
-
-  pid = fork();
-  if(pid < 0){
-    printf("sysinfotest: fork failed\n");
-    exit(1);
-  }
-  if(pid == 0){
     sinfo(&info);
-    if(info.nproc != nproc+1) {
-      printf("sysinfotest: FAIL nproc is %d instead of %d\n", info.nproc, nproc+1);
-      exit(1);
+    
+    if(info.freemem != 0)
+    {
+        printf("FAIL: SHOULD BE NO FREE MEMORY, BUT NOW STILL HAVE %ld\n", info.freemem);
+        exit(1);
     }
-    exit(0);
-  }
-  wait(&status);
-  sinfo(&info);
-  if(info.nproc != nproc) {
-      printf("sysinfotest: FAIL nproc is %d instead of %d\n", info.nproc, nproc);
-      exit(1);
-  }
+
+    sbrk(-((uint64)sbrk(0) - sz0)); // clear memory
+    return count * PGSIZE;
 }
 
-int
-main(int argc, char *argv[])
+void testmem()
 {
-  printf("sysinfotest: start\n");
-  testcall();
-  testmem();
-  testproc();
-  printf("sysinfotest: OK\n");
-  exit(0);
+    struct sysinfo info; // rice box
+    uint64 expect_free = countfree();
+
+    sinfo(&info); // ask cafeteria how much memory & process left
+
+    if(info.freemem != expect_free) // 
+    {
+        printf("FAIL: EXPECT FREE = %ld, BUT NOW FREE = %ld\n", expect_free, info.freemem);
+        exit(1);
+    }
+
+    if((uint64)sbrk(PGSIZE) == ERROR_CODE)
+    {
+        printf("FAIL: SBRK RELEASE JUST NOW FAILED\n");
+        exit(1);
+    }
+
+    sinfo(&info); // ask again
+
+    if(info.freemem != expect_free - PGSIZE)
+    {
+        printf("FAIL: EXPECT FREE = %ld, BUT NOW FREE = %ld\n", expect_free, info.freemem);
+        exit(1);
+    }
+
+    if((uint64)sbrk(-PGSIZE) == ERROR_CODE)
+    {
+        printf("FAIL: 5000%% WONT PRINT THIS, TOO HARD");
+        exit(1);
+    }
+
+    sinfo(&info);
+
+    if(info.freemem != expect_free)
+    {
+        printf("FAIL: EXPECT FREE = %ld, BUT NOW FREE = %ld\n", expect_free, info.freemem);
+        exit(1);
+    }
+}
+
+void testcall()
+{
+    struct sysinfo info;
+
+    if(sysinfo(&info) < 0)
+    {
+        printf("FAIL: SYSINFO FAILED\n");
+        exit(1);
+    }
+    
+    // imposible address for user to visit
+    if(sysinfo((struct sysinfo*)0xeaeb0b5b00002f5e) != ERROR_CODE) 
+    {
+        printf("FAIL: BUT PRO, HOW BRO VISIT THIS ADDRESS :0\n");
+        exit(1);
+    }
+}
+
+void testproc()
+{
+    struct sysinfo info;
+    uint64 nproc;
+    int pid;
+
+    sinfo(&info);
+    nproc = info.nproc;
+
+    pid = fork();
+    if(pid == 0)
+    {
+        sinfo(&info);
+        
+        if(info.nproc != nproc + 1)
+        {
+            printf("CHILD FAIL: SHOULD BE %ld, NOT %ld\n", nproc, info.nproc);
+            exit(1);
+        }
+        exit(0);
+    }
+
+    if(pid < 0)
+    {
+        printf("FAIL: FORK FAILED\n");
+        exit(1);
+    }
+
+    wait(0);
+    sinfo(&info);
+    if(info.nproc != nproc)
+    {
+        printf("CHILD FAIL: SHOULD BE %ld, NOT %ld\n", nproc, info.nproc);
+        exit(1);
+    }
+}
+
+int main(int argc, char* argv[])
+{
+    printf("SYSINFOTEST: START\n");
+    testcall();
+    testmem();
+    testproc();
+    printf("SYSINFOTEST: OK\n");
+    exit(0);
 }
