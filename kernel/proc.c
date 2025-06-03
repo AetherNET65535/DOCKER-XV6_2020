@@ -113,6 +113,11 @@ found:
     return 0;
   }
 
+  if((p->alarm_regs = (struct trapframe *)kalloc()) == 0){
+    release(&p->lock);
+    return 0;
+  }
+
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
@@ -147,6 +152,9 @@ freeproc(struct proc *p)
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
+  if(p->alarm_regs)
+    kfree((void*)p->alarm_regs);
+  p->alarm_regs = 0;
   p->sz = 0;
   p->pid = 0;
   p->parent = 0;

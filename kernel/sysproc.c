@@ -110,7 +110,7 @@ sys_sigalarm(void)
   struct proc* p = myproc();
   p->alarm_ticks = ticks;
   p->alarm_handler_addr = handler_addr;
-  p->last_ticks = ticks;
+  p->last_ticks = p->ticks;
 
   return 0;
 }
