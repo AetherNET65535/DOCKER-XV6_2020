@@ -1,89 +1,83 @@
 #include "kernel/types.h"
-#include "kernel/stat.h"
-#include "kernel/param.h"
 #include "user/user.h"
-#define stdin 0
-#define stdout 1
-#define stderr 2
-#define MAX_ARG_LEN 1024
+#include "kernel/param.h"
 
-int main (int argc, char* argv[])
+#define READ 0
+
+#define MAX_ARG_LEN 512
+// #define MAXARG 32
+
+int main(int argc, char *argv[])
 {
-  int pid;
-  int readReturn;
-  int index = 0;
-  char temp;
-  char argTemp[MAX_ARG_LEN];
-  char *argFull[MAXARG];
-  int escapeMode = 0;
-
-  // init
-  for (int i = 1; i < argc; i++)
-  {
-    argFull[i-1] = argv[i];
-  }
-  argFull[argc-1] = argTemp; // Temp that always change, like a pipe
-  argFull[argc] = 0;
-
-  while ((readReturn = read(stdin, &temp, 1)) > 0)
-  {
-    if (escapeMode)
+    if (argc < 2) 
     {
-      escapeMode = 0;
-
-      if (temp == 'n')
-      {
-        argTemp[index++] = '\n';
-      }
-      else if (temp == 't')
-      {
-        argTemp[index++] = '\t';
-      }
-      else if (temp == '\\')
-      {
-        argTemp[index++] = '\\';
-      }
-      else
-      {
-        argTemp[index++] = '\\';
-        argTemp[index++] = temp;
-      }
-    }
-    else if (temp == '\\')
-    {
-      escapeMode = 1;
-    }
-    else if (temp == '\n')
-    {
-      argTemp[index] = 0;
-      pid = fork();
-      if (pid == 0)
-      {
-        exec(argFull[0], argFull);
-        fprintf(stderr, "EXEC ERROR\n");
-        exit(0);
-      }
-      else if (pid > 0)
-      {
-        wait(0);
-        index = 0;
-        escapeMode = 0;
-      }
-      else
-      {
-        fprintf(stderr, "FORK ERROR\n");
+        fprintf(2, "missing command\n");
         exit(1);
-      }
-    }
-    else
-    {
-      argTemp[index++] = temp;
     }
 
-    if (readReturn < 0)
+    char line[MAX_ARG_LEN];
+    int index = 0;
+    char ch;
+    
+    // read a char
+    while (read(READ, &ch, 1) > 0) 
     {
-      fprintf(stderr, "READ ERROR\n");
+        // end of a line
+        if (ch == '\n') 
+        {
+            line[index] = '\0'; // add null terminator
+            
+            // a memory per argument
+            char *cmd_argv[MAXARG];
+            for (int i = 0; i < argc - 1; i++) 
+            {
+                cmd_argv[i] = malloc(strlen(argv[i+1]) + 1);
+                strcpy(cmd_argv[i], argv[i+1]); 
+            }
+
+            // a block for input line
+            cmd_argv[argc-1] = malloc(strlen(line) + 1);
+            strcpy(cmd_argv[argc-1], line);
+            cmd_argv[argc] = 0; // add end of array
+
+            int pid = fork();
+            if (pid == 0) // child process
+            {
+                exec(cmd_argv[0], cmd_argv); // exec(path, argv)
+                fprintf(2, "exec %s failed\n", cmd_argv[0]); // if exec fails
+                exit(1);
+            } 
+            else if (pid > 0) // parent process
+            {
+                wait(0);
+                
+                // free memory allocated
+                for (int i = 0; i < argc; i++) 
+                {
+                    free(cmd_argv[i]);
+                }
+            }
+            else // fork failed 
+            {
+                fprintf(2, "fork failed\n");
+                exit(1);
+            }
+            index = 0;    
+        } 
+        else // common char
+        {
+            // check if the argument length is out of limit
+            if (index < MAX_ARG_LEN - 1) 
+            {
+                line[index++] = ch;
+            } 
+            else // argument too long
+            {
+                fprintf(2, "argument too long\n");
+                while (read(READ, &ch, 1) > 0 && ch != '\n');
+                index = 0;
+            }
+        }
     }
-  }
-  exit(0);
+    exit(0);
 }
