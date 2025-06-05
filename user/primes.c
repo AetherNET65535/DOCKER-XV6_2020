@@ -5,24 +5,24 @@
 #define READ 0
 #define WRITE 1
 
-__attribute__((noreturn))
+__attribute__((noreturn)) // to avoid warning about not returning
 void sieve_algo (int left[2], int depth)
 {
     close(left[WRITE]);
 
     int prime, temp, pid, right[2];
 
-    // if cant read any number...QAQ
+    // read a prime number from the pipe
     if (read(left[READ], &prime, sizeof(int)) == 0)
     {
         close(left[READ]);
         exit(0);
     }
     
-    // if too deep (prob will stackoverflow, kinda useless func, but just add, 保险起见)
-    if (depth > 16) // 15 is enough, but 16 is more romance
+    // if the depth is too deep, we have a stack overflow
+    if (depth > 15)
     {
-        fprintf(2, "my_stackoverflow(not real, but have error, cuz too deep)\n");
+        fprintf(2, "stackoverflow\n");
         close(right[READ]);
         close(right[WRITE]);
         close(left[READ]);
@@ -32,7 +32,8 @@ void sieve_algo (int left[2], int depth)
     printf("prime: %d\n", prime);
     pipe(right);
 
-    if ((pid = fork()) > 0)
+    pid = fork();
+    if (pid > 0) // parent process
     {
         close(right[READ]);
 
@@ -50,16 +51,16 @@ void sieve_algo (int left[2], int depth)
         wait(0);
         exit(0);
     }
-    else if (pid == 0)
+    else if (pid == 0) // child process
     {
         close(left[READ]);
         close(right[WRITE]);
         sieve_algo(right, depth + 1);
         exit(0);
     }
-    else
+    else // fork failed
     {
-        fprintf(2, "fork error...\n");
+        fprintf(2, "fork error\n");
         close(right[READ]);
         close(right[WRITE]);
         close(left[READ]);
@@ -70,27 +71,30 @@ void sieve_algo (int left[2], int depth)
 int main(int argc, char* argv[])
 {
     int pid, p[2];
-    pipe(p); // give 'p' a acess to this p (prob kernel will give him, idk)
+    pipe(p);
 
-    if ((pid = fork()) > 0) // parent
+    pid = fork();
+    if (pid > 0) // parent process
     {
         close(p[READ]);
-
+        
+        // write 2 to 35 to the pipe
         for (int i = 2; i <= 35; i++)
         {
             write(p[WRITE], &i, sizeof(int));
         }
-
+        
+        // p finish working
         close(p[WRITE]);
-        wait(0); // wait child kill himself
-        exit(0); // kys
+        wait(0); 
+        exit(0); 
     }
-    else if (pid == 0) // child
+    else if (pid == 0) // child process
     {
         sieve_algo(p, 1);
         exit(0);
     }
-    else // 5000% have error
+    else // fork failed
     {
         fprintf(2, "fork error\n");
         exit(1);
