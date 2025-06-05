@@ -3,62 +3,69 @@
 #include "kernel/fs.h"
 #include "user/user.h"
 #include "kernel/fcntl.h"
+
 char *
-fmtname (char *path)
+fmtname(char *path)
 {
   char *p;
 
-  for (p = path + strlen (path); p >= path && *p != '/'; --p)
+  // find the last '/' in the path
+  for(p = path + strlen(path); p >= path && *p != '/'; --p)
     ;
   return p + 1;
 }
 
 void
-find (char *path, char *filename)
+find(char *path, char *filename)
 {
   char buf[512], *p;
   int fd;
   struct stat st;
   struct dirent de;
 
-  if ((fd = open (path, 0)) < 0)
+  // get the file descriptor
+  if((fd = open (path, 0)) < 0)
   {
-    fprintf (2, "find: cannot open %s\n", path);
+    fprintf(2, "find: cannot open %s\n", path);
     return;
   }
 
-  if (fstat (fd, &st) < 0)
+  // get the file stats
+  if(fstat (fd, &st) < 0)
   {
-    fprintf (2, "find: cannot stat %s\n", path);
-    close (fd);
+    fprintf(2, "find: cannot stat %s\n", path);
+    close(fd);
     return;
   }
 
-  switch (st.type)
+  switch(st.type)
   {
-    case T_FILE:
-      if (strcmp (fmtname (path), filename) == 0)
+    case T_FILE: // if it is a file
+      // check if the file name matches the given filename
+      if(strcmp(fmtname(path), filename) == 0)
       {
-        printf ("%s\n", path);
+        printf("%s\n", path);
       }
       break;
 
-    case T_DIR:
-      strcpy (buf, path);
-      p = buf + strlen (buf);
+    case T_DIR: // if it is a directory
+      strcpy(buf, path);
+      p = buf + strlen(buf);
       *p++ = '/';
-
-      while (read (fd, &de, sizeof (de)) == sizeof (de))
+      
+      // read the whole directory, until the end of the directory
+      while(read(fd, &de, sizeof(de)) == sizeof(de))
       {
-        if (de.inum == 0 || strcmp (de.name, ".") == 0
-          || strcmp (de.name, "..") == 0)
+        if(de.inum == 0 || strcmp(de.name, ".") == 0
+          || strcmp(de.name, "..") == 0)
           continue;
 
-        memmove (p, de.name, DIRSIZ);
+        memmove(p, de.name, DIRSIZ);
         p[DIRSIZ] = 0;
-        find (buf, filename);
+        find(buf, filename); // recursive call to find in subdirectories
       }
       break;
+
     default:
       break;
   }
@@ -66,13 +73,13 @@ find (char *path, char *filename)
 }
 
 int
-main (int argc, char *argv[])
+main(int argc, char *argv[])
 {
-  if (argc < 3)
+  if(argc < 3)
   {
-    fprintf (2, "USAGE <start_path> <file_name>\n");
-    exit (0);
+    fprintf(2, "usage: find <start_path> <file_name>\n");
+    exit(0);
   }
-  find (argv[1], argv[2]);
-  exit (0);
+  find(argv[1], argv[2]);
+  exit(0);
 }
