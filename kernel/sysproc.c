@@ -100,8 +100,13 @@ sys_uptime(void)
 uint64 
 sys_trace(void)
 {
-  argint(0, &myproc()->mask);
-  printf("trace pid: %d\n", myproc()->pid);
+  struct proc *p = myproc();
+
+  // get int from user
+  if(argint(0, &p->mask) < 0)
+    return -1;
+
+  printf("trace pid: %d\n", p->pid);
   return 0;
 }
 
