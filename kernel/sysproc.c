@@ -100,11 +100,8 @@ sys_uptime(void)
 uint64 
 sys_trace(void)
 {
-  int mask;
-
-  argint(0, &mask);
+  argint(0, &myproc()->mask);
   printf("trace pid: %d\n", myproc()->pid);
-  myproc()->mask = mask;
   return 0;
 }
 
