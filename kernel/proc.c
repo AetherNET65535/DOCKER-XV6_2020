@@ -21,6 +21,8 @@ static void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
 
+extern pagetable_t kernel_pagetable;
+
 // initialize the proc table at boot time.
 void
 procinit(void)
@@ -491,6 +493,8 @@ scheduler(void)
         sfence_vma();
 
         swtch(&c->context, &p->context);
+
+        kvminithart();
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
