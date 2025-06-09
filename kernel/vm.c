@@ -504,13 +504,11 @@ vmprint_ori(pagetable_t pagetable, int level)
 {
   for(int i = 0; i < 512; i++){
     pte_t pte = pagetable[i];
-    if (!(pte & PTE_V)) {
-      continue;
-    }
+    if (!(pte & PTE_V)) continue;
 
-    for (int i = 0; i <= level; i++) {
+    for (int i = 3; i > level; i--) {
       printf("..");
-      if(i != level) {
+      if(i-1 > level){
         printf(" ");
       }
     }
@@ -518,7 +516,7 @@ vmprint_ori(pagetable_t pagetable, int level)
       
     if((pte & (PTE_R|PTE_W|PTE_X)) == 0){
       uint64 child = PTE2PA(pte);
-      vmprint_ori((pagetable_t)child, level + 1);
+      vmprint_ori((pagetable_t)child, level - 1);
     }
   }
 }
