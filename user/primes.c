@@ -29,7 +29,7 @@ void sieve_algo (int left[2], int depth)
         exit(1);
     }
 
-    printf("prime: %d\n", prime);
+    printf("prime %d\n", prime);
     pipe(right);
 
     pid = fork();
