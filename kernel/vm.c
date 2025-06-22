@@ -253,10 +253,8 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
   return newsz;
 }
 
-// mode 0: trap
-// mode 1: read/write
 static int
-_lazyalloc_internal(uint64 va, struct proc *p, int mode)
+_lazyalloc_internal(uint64 va, struct proc *p, int do_kill)
 {
   char *mem = kalloc();
   if(mem == 0)
@@ -271,7 +269,7 @@ _lazyalloc_internal(uint64 va, struct proc *p, int mode)
   return 0;
 
   err:
-  if(mode == 0)
+  if(do_kill)
     p->killed = 1;
   return -1;
 }
@@ -283,7 +281,7 @@ lazyalloc(uint64 stval, struct proc *p)
   if(stval >= p->sz || stval <= PGROUNDDOWN(p->trapframe->sp))
     goto err;
 
-  return _lazyalloc_internal(va, p, 0);
+  return _lazyalloc_internal(va, p, 1);
 
   err:
   p->killed = 1;
@@ -296,7 +294,7 @@ lazyalloc_rw(uint64 va, struct proc *p)
   if(va >= p->sz || va <= PGROUNDDOWN(p->trapframe->sp))
     goto err;
 
-  return _lazyalloc_internal(va, p, 1);
+  return _lazyalloc_internal(va, p, 0);
 
   err:
   return -1;
