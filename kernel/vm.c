@@ -280,7 +280,7 @@ int
 lazyalloc(uint64 stval, struct proc *p)
 {
   uint64 va = PGROUNDDOWN(stval);
-  if(stval >= p->sz || stval < PGROUNDDOWN(p->trapframe->sp))
+  if(stval >= p->sz || stval <= PGROUNDDOWN(p->trapframe->sp))
     goto err;
 
   return _lazyalloc_internal(va, p, 0);
@@ -293,7 +293,7 @@ lazyalloc(uint64 stval, struct proc *p)
 int
 lazyalloc_rw(uint64 va, struct proc *p)
 {
-  if(va >= p->sz || va < PGROUNDDOWN(p->trapframe->sp))
+  if(va >= p->sz || va <= PGROUNDDOWN(p->trapframe->sp))
     goto err;
 
   return _lazyalloc_internal(va, p, 1);
