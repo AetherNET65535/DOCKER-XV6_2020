@@ -69,7 +69,8 @@ usertrap(void)
     // ok
   } else if (r_scause() == 13 || r_scause() == 15){
     uint64 stval = r_stval();
-    lazyalloc(stval, p);
+    if(lazyalloc(stval, p) == 0)
+      p->killed = 1;
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

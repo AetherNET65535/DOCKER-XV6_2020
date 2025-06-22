@@ -103,12 +103,15 @@ walkaddr(pagetable_t pagetable, uint64 va)
     return 0;
 
   pte = walk(pagetable, va, 0);
-  if(pte == 0)
-    return 0;
-  if((*pte & PTE_V) == 0)
-    return 0;
+  if(pte == 0||(*pte & PTE_V) == 0){
+    pa = lazyalloc(va, myproc());
+    if(pa == 0)
+      return 0;
+    return pa;
+  }
   if((*pte & PTE_U) == 0)
     return 0;
+
   pa = PTE2PA(*pte);
   return pa;
 }
@@ -253,51 +256,26 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
   return newsz;
 }
 
-static int
-_lazyalloc_internal(uint64 va, struct proc *p, int do_kill)
-{
-  char *mem = kalloc();
-  if(mem == 0)
-    goto err;
-
-  memset(mem, 0, PGSIZE);
-  if(mappages(p->pagetable, va, PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_U) != 0){
-    kfree(mem);
-    goto err;
-  }
-
-  return 0;
-
-  err:
-  if(do_kill)
-    p->killed = 1;
-  return -1;
-}
-
-int
+uint64
 lazyalloc(uint64 stval, struct proc *p)
 {
   uint64 va = PGROUNDDOWN(stval);
+  
   if(stval >= p->sz || stval <= PGROUNDDOWN(p->trapframe->sp))
-    goto err;
+    return 0;
 
-  return _lazyalloc_internal(va, p, 1);
+  char *mem = kalloc();
+  if(mem == 0){
+    return 0;
+  }
 
-  err:
-  p->killed = 1;
-  return -1;
-}
+  memset(mem, 0, PGSIZE);
+  if(mappages(p->pagetable, va, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+    kfree(mem);
+    return 0;
+  }
 
-int
-lazyalloc_rw(uint64 va, struct proc *p)
-{
-  if(va >= p->sz || va <= PGROUNDDOWN(p->trapframe->sp))
-    goto err;
-
-  return _lazyalloc_internal(va, p, 0);
-
-  err:
-  return -1;
+  return (uint64)mem;
 }
 
 // Deallocate user pages to bring the process size from oldsz to
