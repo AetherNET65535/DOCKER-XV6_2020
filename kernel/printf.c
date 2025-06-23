@@ -116,13 +116,14 @@ printf(char *fmt, ...)
 void
 backtrace(char* s)
 {
-  uint64 curfp = r_fp();
+  uint64 fp = r_fp();
   printf("backtrace: ");
   printf(s);
   printf("\n");
 
-  for(uint64 fp = curfp; fp < PGROUNDUP(curfp); fp = *((uint64*)(fp - 16)))
-    printf("%p\n", *((uint64*)(fp - 8))); 
+  // if still in same page, goto previous stack frame
+  for(; PGROUNDDOWN(fp) < PGROUNDUP(fp); fp = *((uint64*)(fp - 16)))
+    printf("%p\n", *((uint64*)(fp - 8))); // print return address
 }
 
 void
