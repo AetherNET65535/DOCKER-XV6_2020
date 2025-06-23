@@ -132,11 +132,6 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
-  // init of lab alarm
-  p->ticks = 0;
-  p->last_ticks = 0;
-  p->alarm_running = 0;
-
   return p;
 }
 
