@@ -112,7 +112,8 @@ add_pgrfc(uint64 pa, int n)
 }
 
 void
-set_pgrfc(uint64 pa, int n){
+set_pgrfc(uint64 pa, int n)
+{
   pgrfc[index_rfc(pa)] = n;
 }
 
