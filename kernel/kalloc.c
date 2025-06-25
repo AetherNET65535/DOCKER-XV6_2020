@@ -93,9 +93,7 @@ kalloc(void)
 
   if(r){
     memset((char*)r, 5, PGSIZE); // fill with junk
-    printf("kalloc %d", pgrfc[index_rfc((uint64)r)]); 
-    printf("\n");
-    add_pgrfc((uint64)r, 1);
+    set_pgrfc((uint64)r, 1);
   }
   return (void*)r;
 }
