@@ -324,8 +324,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
 
-    *pte = *pte & ~PTE_W;
-    *pte = *pte | PTE_COW;
+    *pte = (*pte & ~PTE_W) | PTE_COW;
 
     acquire(&rfc_lock);
     add_pgrfc(pa, 1);
