@@ -331,17 +331,13 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     add_pgrfc(pa, 1);
     release(&rfc_lock);
 
-    if(mappages(new, i, PGSIZE, pa, (flags & ~PTE_W)|PTE_COW) != 0){
-      acquire(&rfc_lock);
-      add_pgrfc(pa, -1);
-      release(&rfc_lock);
+    if(mappages(new, i, PGSIZE, pa, (flags & ~PTE_W)|PTE_COW) != 0)
       goto err;
-    }
   }
   return 0;
 
  err:
-  uvmunmap(new, 0, i / PGSIZE, 0);
+  uvmunmap(new, 0, i / PGSIZE, 1);
   return -1;
 }
 
