@@ -352,13 +352,7 @@ cow(uint64 va, struct proc *p)
       return -1;
 
     memmove(mem, (char*)pa, PGSIZE);
-
-    acquire(&rfc_lock);
-    add_pgrfc(pa, -1);
-    uint16 rfc = get_pgrfc(pa);
-    release(&rfc_lock);
-    if(rfc < 1)
-      kfree((char*)pa);
+    kfree((char*)pa);
     
     pte_t newpte = PA2PTE(mem);
     newpte = ((newpte | PTE_FLAGS(*pte)) | PTE_W) & ~PTE_COW;
@@ -395,7 +389,8 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;
-    cow(va0, myproc());
+    if(cow(va0, myproc()) == -1) // no more memory
+      myproc()->killed = 1;
     pa0 = walkaddr(pagetable, va0);
 
     n = PGSIZE - (dstva - va0);
