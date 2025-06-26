@@ -333,7 +333,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 
     if(mappages(new, i, PGSIZE, pa, (flags & ~PTE_W)|PTE_COW) != 0){
       acquire(&rfc_lock);
-      add_pgrfc(pa, 1);
+      add_pgrfc(pa, -1);
       release(&rfc_lock);
       goto err;
     }
