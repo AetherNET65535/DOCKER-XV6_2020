@@ -111,7 +111,8 @@ main(int argc, char *argv[])
   pthread_t *tha;
   void *value;
   double t1, t0;
-  pthread_rwlock_init(&lock[NBUCKET], NULL);
+  for(int i = 0; i < NBUCKET; i++)
+    pthread_rwlock_init(&lock[i], NULL);
 
   if (argc < 2) {
     fprintf(stderr, "Usage: %s nthreads\n", argv[0]);
