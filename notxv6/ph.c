@@ -17,6 +17,8 @@ struct entry *table[NBUCKET];
 int keys[NKEYS];
 int nthread = 1;
 
+pthread_rwlock_t lock[NBUCKET];
+
 double
 now()
 {
@@ -42,16 +44,23 @@ void put(int key, int value)
 
   // is the key already present?
   struct entry *e = 0;
+  pthread_rwlock_rdlock(&lock[i]);
   for (e = table[i]; e != 0; e = e->next) {
     if (e->key == key)
       break;
   }
+  pthread_rwlock_unlock(&lock[i]);
+
   if(e){
     // update the existing key.
+    pthread_rwlock_wrlock(&lock[i]);
     e->value = value;
+    pthread_rwlock_unlock(&lock[i]);
   } else {
     // the new is new.
+    pthread_rwlock_wrlock(&lock[i]);
     insert(key, value, &table[i], table[i]);
+    pthread_rwlock_unlock(&lock[i]);
   }
 }
 
@@ -60,12 +69,12 @@ get(int key)
 {
   int i = key % NBUCKET;
 
-
   struct entry *e = 0;
+  pthread_rwlock_rdlock(&lock[i]);
   for (e = table[i]; e != 0; e = e->next) {
     if (e->key == key) break;
   }
-
+  pthread_rwlock_unlock(&lock[i]);
   return e;
 }
 
@@ -102,6 +111,7 @@ main(int argc, char *argv[])
   pthread_t *tha;
   void *value;
   double t1, t0;
+  pthread_rwlock_init(&lock[NBUCKET], NULL);
 
   if (argc < 2) {
     fprintf(stderr, "Usage: %s nthreads\n", argv[0]);
