@@ -23,7 +23,7 @@
 #include "fs.h"
 #include "buf.h"
 
-#define NBUC 16
+#define HASHI(x) (x & (NBUC - 1))
 
 struct {
   struct spinlock lock;
@@ -38,12 +38,6 @@ struct {
   struct buf buc[NBUC];
   struct spinlock buc_lock[NBUC];
 } bcache;
-
-int
-hash(uint blockno)
-{
-  return blockno & (NBUC - 1);
-}
 
 void
 binit(void)
@@ -62,7 +56,7 @@ binit(void)
   // Create hash table of buffers
   // Head insert
   for(b = bcache.buf; b < bcache.buf+NBUF; b++){
-    int x = hash(b->blockno);
+    int x = HASHI(b->blockno);
 
     b->next = bcache.buc[x].next;
     b->prev = &bcache.buc[x];
@@ -83,7 +77,7 @@ static struct buf*
 bget(uint dev, uint blockno)
 {
   struct buf *b;
-  int x = hash(blockno);
+  int x = HASHI(blockno);
 
   // Is the block already cached?
   acquire(&bcache.buc_lock[x]);
@@ -129,7 +123,7 @@ bget(uint dev, uint blockno)
       if(b->refcnt == 0 && b->ticks < mticks){
 
         if(minb != 0){
-          int last = hash(minb->blockno);
+          int last = HASHI(minb->blockno);
           if(last != i)
             release(&bcache.buc_lock[last]);
 
@@ -150,7 +144,7 @@ bget(uint dev, uint blockno)
   if(minb == 0)
     panic("bget: no buffers");
 
-  int minb_x = hash(minb->blockno);
+  int minb_x = HASHI(minb->blockno);
 
   minb->dev = dev;
   minb->blockno = blockno;
@@ -212,7 +206,7 @@ brelse(struct buf *b)
 
   releasesleep(&b->lock);
 
-  int x = hash(b->blockno);
+  int x = HASHI(b->blockno);
   acquire(&bcache.buc_lock[x]);
   b->refcnt--;
   if (b->refcnt == 0) 
@@ -222,7 +216,7 @@ brelse(struct buf *b)
 
 void
 bpin(struct buf *b) {
-  int x = hash(b->blockno);
+  int x = HASHI(b->blockno);
 
   acquire(&bcache.buc_lock[x]);
   b->refcnt++;
@@ -231,7 +225,7 @@ bpin(struct buf *b) {
 
 void
 bunpin(struct buf *b) {
-  int x = hash(b->blockno);
+  int x = HASHI(b->blockno);
 
   acquire(&bcache.buc_lock[x]);
   b->refcnt--;
