@@ -16,6 +16,9 @@
 #include "file.h"
 #include "fcntl.h"
 
+struct inode*
+find_symlink(char *path, char *rpath, int depth);
+
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
 static int
@@ -252,7 +255,7 @@ create(char *path, short type, short major, short minor)
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
-    if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))
+    if((type == T_FILE || type == T_SYMLINK) && (ip->type == T_FILE || ip->type == T_SYMLINK || ip->type == T_DEVICE))
       return ip;
     iunlockput(ip);
     return 0;
@@ -304,10 +307,19 @@ sys_open(void)
       return -1;
     }
   } else {
-    if((ip = namei(path)) == 0){
-      end_op();
-      return -1;
+    if(omode & O_NOFOLLOW){
+      if((ip = namei(path)) == 0){
+        end_op();
+        return -1;
+      }
+    } else {
+      char rpath[MAXPATH];
+      if((ip = find_symlink(path, rpath, 0)) == 0){
+        end_op();
+        return -1;
+      }
     }
+    
     ilock(ip);
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
@@ -481,6 +493,71 @@ sys_pipe(void)
     fileclose(rf);
     fileclose(wf);
     return -1;
+  }
+  return 0;
+}
+
+uint64
+sys_symlink(void)
+{
+  char tgt[MAXPATH], new[MAXPATH];
+  uint len;
+  struct inode *op, *ip;
+
+  if(argstr(0, tgt, MAXPATH) < 0 || argstr(1, new, MAXPATH) < 0)
+    return -1;
+
+  begin_op();
+  if((op = namei(tgt)) != 0){
+    ilock(op);
+    if(op->type == T_DIR){
+      iunlockput(op);
+      end_op();
+      return -1;
+    }
+    iunlockput(op);
+  }
+
+  if((ip = create(new, T_SYMLINK, 0, 0)) == 0){
+    end_op();
+    return -1;
+  }
+
+  len = strlen(tgt)+1;
+  if(writei(ip, 0, (uint64)tgt, 0, len) != len){
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
+
+  iupdate(ip);
+  iunlockput(ip);
+  end_op();
+
+  return 0;
+}
+
+struct inode*
+find_symlink(char *path, char *rpath, int depth)
+{
+  if(depth >= 10)
+    return 0;
+
+  struct inode *ip;
+  if((ip = namei(path)) != 0){
+    ilock(ip);
+
+    if(ip->type != T_SYMLINK){
+      iunlock(ip);
+      return ip;
+    }
+    if(readi(ip, 0, (uint64)rpath, 0, ip->size) == 0){
+      iunlockput(ip);
+      return 0;
+    }
+    iunlockput(ip);
+
+    return find_symlink(rpath, rpath, depth+1);
   }
   return 0;
 }
