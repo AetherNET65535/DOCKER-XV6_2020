@@ -37,6 +37,8 @@ struct {
   // hash bucket
   struct buf buc[NBUC];
   struct spinlock buc_lock[NBUC];
+
+  struct spinlock glb_lock[NBUC];
 } bcache;
 
 void
@@ -45,9 +47,9 @@ binit(void)
   struct buf *b;
   int i;
 
-  initlock(&bcache.lock, "bcache");
   for(i = 0; i < NBUC; i++){
     initlock(&bcache.buc_lock[i], "bcache.buc");
+    initlock(&bcache.glb_lock[i], "bcache.glb");
 
     bcache.buc[i].next = &bcache.buc[i];
     bcache.buc[i].prev = &bcache.buc[i];
@@ -79,20 +81,8 @@ bget(uint dev, uint blockno)
   struct buf *b;
   int x = HASHI(blockno);
 
-  // Is the block already cached?
-  acquire(&bcache.buc_lock[x]);
-  for(b = bcache.buc[x].next; b != &bcache.buc[x]; b = b->next){
-    if(b->dev == dev && b->blockno == blockno){
-      b->refcnt++;
-      release(&bcache.buc_lock[x]);
-      acquiresleep(&b->lock);
-      return b;
-    }
-  }
-  // Not cached for now
-  release(&bcache.buc_lock[x]);
-
-  acquire(&bcache.lock);
+  // Start here
+  acquire(&bcache.glb_lock[x]);
 
   // Check again
   // Is the block already cached?
@@ -101,7 +91,7 @@ bget(uint dev, uint blockno)
     if(b->dev == dev && b->blockno == blockno){
       b->refcnt++;
       release(&bcache.buc_lock[x]);
-      release(&bcache.lock);
+      release(&bcache.glb_lock[x]);
       acquiresleep(&b->lock);
       return b;
     }
@@ -168,7 +158,7 @@ bget(uint dev, uint blockno)
     release(&bcache.buc_lock[x]);
   }
   
-  release(&bcache.lock);
+  release(&bcache.glb_lock[x]);
   acquiresleep(&minb->lock);
   return minb;
 }
@@ -209,7 +199,7 @@ brelse(struct buf *b)
   int x = HASHI(b->blockno);
   acquire(&bcache.buc_lock[x]);
   b->refcnt--;
-  if (b->refcnt == 0) 
+  if (b->refcnt == 0)
     b->ticks = ticks;
   release(&bcache.buc_lock[x]);
 }
