@@ -23,18 +23,19 @@
 #include "fs.h"
 #include "buf.h"
 
-#define HASHI(x) (x & (NBUC - 1))
+#define HASHI(noblock) (noblock & (NBUC - 1))
 
 struct {
+  /* We won't use those fields anymore
+  at lest won't use in this lab
+
+  struct buf head;
   struct spinlock lock;
+  */
+
   struct buf buf[NBUF];
 
-  // Linked list of all buffers, through prev/next.
-  // Sorted by how recently the buffer was used.
-  // head.next is most recent, head.prev is least.
-  struct buf head;
-
-  // hash bucket
+  // Hash bucket
   struct buf buc[NBUC];
   struct spinlock buc_lock[NBUC];
 
@@ -55,7 +56,7 @@ binit(void)
     bcache.buc[i].prev = &bcache.buc[i];
   }
 
-  // Create hash table of buffers
+  // Init the hash table
   // Head insert
   for(b = bcache.buf; b < bcache.buf+NBUF; b++){
     int x = HASHI(b->blockno);
@@ -84,7 +85,6 @@ bget(uint dev, uint blockno)
   // Start here
   acquire(&bcache.glb_lock[x]);
 
-  // Check again
   // Is the block already cached?
   acquire(&bcache.buc_lock[x]);
   for(b = bcache.buc[x].next; b != &bcache.buc[x]; b = b->next){
@@ -103,7 +103,7 @@ bget(uint dev, uint blockno)
   struct buf *minb = 0;
   uint mticks = ~0;
 
-  // Recycle the LRU unused buffer
+  // Iterate over all buckets
   for(int i = 0; i < NBUC; i++){
     acquire(&bcache.buc_lock[i]);
     int find = 0;
@@ -111,26 +111,22 @@ bget(uint dev, uint blockno)
     // Find lastest ununsed buffer
     for(b = bcache.buc[i].next; b != &bcache.buc[i]; b = b->next){
       if(b->refcnt == 0 && b->ticks < mticks){
-
         if(minb != 0){
           int last = HASHI(minb->blockno);
           if(last != i)
             release(&bcache.buc_lock[last]);
-
         }
-
         mticks = b->ticks;
         minb = b;
         find = 1;
-
       }
     }
-    // No buf in this bucket
+    // No unused buffer in this bucket
     if(!find)
       release(&bcache.buc_lock[i]);
   }
 
-  // No buf in ALL bucket
+  // No unused buffer in all buckets
   if(minb == 0)
     panic("bget: no buffers");
 
@@ -138,15 +134,31 @@ bget(uint dev, uint blockno)
 
   minb->dev = dev;
   minb->blockno = blockno;
+  /* 
+  Why: Valid is set to 0 here?
+  Because we just need to found,
+  an unused buffer, so it's don't have any data,
+  and we will read the data from disk at bread()
+  */
   minb->valid = 0;
   minb->refcnt = 1;
 
+  // If the unused buffer 
+  // is not which caller wants
+  // then we should move it to
+  // which bucket caller wants
+
+  // Remove the unused buffer
+  // from it's current bucket
   if(minb_x != x){
     minb->prev->next = minb->next;
     minb->next->prev = minb->prev;
   }
   release(&bcache.buc_lock[minb_x]);
 
+  // Insert the unused buffer
+  // to the bucket which caller wants
+  // Head insert
   if(minb_x != x){
     acquire(&bcache.buc_lock[x]);
 
@@ -158,6 +170,7 @@ bget(uint dev, uint blockno)
     release(&bcache.buc_lock[x]);
   }
   
+  // End here
   release(&bcache.glb_lock[x]);
   acquiresleep(&minb->lock);
   return minb;
