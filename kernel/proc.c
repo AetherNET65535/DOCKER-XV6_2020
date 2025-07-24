@@ -260,6 +260,17 @@ growproc(int n)
   return 0;
 }
 
+void
+fork_mmap(struct proc *np, struct proc *p)
+{
+  for(int i = 0; i < NVMA; i++){
+    if(p->vma[i].used){
+      np->vma[i] = p->vma[i];
+      filedup(np->vma[i].file);
+    }
+  }
+}
+
 // Create a new process, copying the parent.
 // Sets up child kernel stack to return as if from fork() system call.
 int
@@ -297,6 +308,8 @@ fork(void)
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
+
+  fork_mmap(np, p);
 
   pid = np->pid;
 
@@ -350,6 +363,16 @@ exit(int status)
       struct file *f = p->ofile[fd];
       fileclose(f);
       p->ofile[fd] = 0;
+    }
+  }
+
+  // Write back all mapped page
+  // Close all used vma
+  for(int i = 0; i < NVMA; i++){
+    if(p->vma[i].used){
+      int length = p->vma[i].end - p->vma[i].start;
+      munmap(p->vma[i].start, length);
+      p->vma[i].used = 0;
     }
   }
 

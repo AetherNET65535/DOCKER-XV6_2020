@@ -15,6 +15,7 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "memlayout.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -483,4 +484,96 @@ sys_pipe(void)
     return -1;
   }
   return 0;
+}
+
+uint64
+sys_mmap(void)
+{
+  uint64 addr;
+  int prot, flags, length, offset;
+  struct file *file;
+  struct proc *p = myproc();
+  struct vma *a = 0;
+
+  if(argaddr(0, &addr) ||
+     argint(1, &length) ||
+     argint(2, &prot) ||
+     argint(3, &flags) ||
+     argfd(4, 0, &file) ||
+     argint(5, &offset) < 0)
+    return -1;
+
+  length = PGROUNDUP(length);
+
+  // Error check
+  if(addr != 0 && addr < VMA_BASE)
+    return -1;
+  if(addr != 0 && addr > TRAPFRAME)
+    return -1;
+  if(addr != 0 && addr % PGSIZE != 0)
+    return -1;
+  if(file->ip->size - offset > length)
+    return -1;
+  if((flags & MAP_SHARED) && !file->writable && (prot & PROT_WRITE))
+    return -1;
+
+  // Find the unused vma structure
+  int i;
+  for(i = 0; i < NVMA; i++){
+    if(!p->vma[i].used){
+      a = &p->vma[i];
+      break;
+    }
+  }
+  if(a == 0) return -1;
+
+  // Find the smallest unused address
+  uint64 next_start = addr == 0 ? VMA_BASE : addr;
+  uint64 next_end = next_start + length;
+  
+  while(next_end < TRAPFRAME){
+    int overlap = 0;
+    for(i = 0; i < NVMA; i++){
+      if(!(p->vma[i].used))
+        continue;
+      while(p->vma[i].start <= next_start && next_start < p->vma[i].end){
+        overlap = 1;
+        next_start += PGSIZE;
+        next_end = next_start + length;
+      }
+    }
+    if(!overlap)
+      break;
+  }
+  if(next_end >= TRAPFRAME)
+    return -1;
+  
+  // Avoid mmap fitted trapframe region
+  if(next_start + length >= TRAPFRAME)
+    return -1;
+
+  // Init
+  a->used = 1;
+  a->start = next_start;
+  a->end = PGROUNDUP(a->start + length);
+  a->file = file;
+  a->offset = offset;
+  a->permission = prot;
+  a->flags = flags;
+
+  filedup(file);
+
+  return a->start;
+}
+
+uint64
+sys_munmap(void)
+{
+  uint64 addr;
+  int length;
+
+  if(argaddr(0, &addr) || argint(1, &length))
+    return -1;
+
+  return munmap(addr, length);
 }

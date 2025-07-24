@@ -5,6 +5,11 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "sleeplock.h"
+#include "proc.h"
+#include "fcntl.h"
+#include "file.h"
 
 /*
  * the kernel's page table.
@@ -428,4 +433,169 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+struct vma*
+vma_exist(uint64 addr, struct proc *p)
+{
+  int i;
+  struct vma *a = 0;
+
+  for(i = 0; i < NVMA; i++){
+    if(p->vma[i].used && addr >= p->vma[i].start && addr < p->vma[i].end){
+      a = &p->vma[i];
+      break;
+    }
+  }
+  return a;
+}
+
+int
+mmap_pgfault(uint64 stval, struct proc *p)
+{
+  struct vma *a = 0;
+  char *pa;
+  uint64 off;
+  struct inode *ip;
+
+  stval = PGROUNDDOWN(stval);
+
+  // Find which vma using this address
+  if((a = vma_exist(stval, p)) == 0)
+    return -1;
+
+  if((pa = kalloc()) == 0)
+    return -1;
+  memset(pa, 0, PGSIZE);
+
+  // Add perm for new page
+  int perm = PTE_U;
+  if(a->permission & PROT_READ)
+    perm |= PTE_R;
+  if(a->permission & PROT_WRITE)
+    perm  |= PTE_W;
+
+  if(mappages(p->pagetable, stval, PGSIZE, (uint64)pa, perm) != 0)
+    return -1;
+
+  off = stval - a->start + a->offset;
+  ip = a->file->ip;
+
+  // Read the file, and send the data to new page
+  // You may wondering, what happens if the file size less than PGSIZE
+  // The answer is, it won't fill the whole page
+  // The code of readi() may help you understand better
+  ilock(ip);
+  if(readi(ip, 0, (uint64)pa, off, PGSIZE) <= 0){
+    iunlock(ip);
+    return -1;
+  }
+  iunlock(ip);
+
+  return 0;
+}
+
+// You may wondering, what diffrent between vm_exist() and walk(..,..,0)
+// The answer is
+// vm_exist() result is if L0 PTE(Leaf PTE) point to a pagetable
+// like, if L0 PTE point to a real data
+int
+vm_exist(pagetable_t pagetable, uint64 va)
+{
+  pte_t *pte = walk(pagetable, va, 0);
+  if((*pte & PTE_V) != 0)
+    return 1;
+  return 0;
+}
+
+// Write back the page to the file
+int
+munmap_writeback(uint64 unstart, uint64 unlen, uint64 start, uint64 offset, struct vma *a)
+{
+  struct file *file = a->file;
+  uint64 off = unstart - start + offset;
+  struct inode *ip = file->ip;
+
+  ilock(ip);
+  uint size = ip->size;
+  iunlock(ip);
+
+  if(off >= size) return -1;
+
+  uint64 n = unlen < size - off ? unlen : size - off;
+
+  int r, ret = 0;
+  int max = ((MAXOPBLOCKS-1-1-2) / 2) * BSIZE;
+  int i = 0;
+
+  while(i < n){
+    int n1 = n - i;
+    if(n1 > max)
+      n1 = max;
+
+    begin_op();
+    ilock(ip);
+    r = writei(ip, 1, unstart, off + i, n1);
+    iunlock(ip);
+    end_op();
+
+    if(r != n1)
+      break;
+    i += r;
+  }
+  ret = i == n ? n : -1;
+
+  return ret;
+}
+
+int
+munmap(uint64 addr, int length)
+{
+  struct proc *p = myproc();
+  struct vma *a = 0;
+  addr = PGROUNDDOWN(addr);
+
+  if((a = vma_exist(addr, p)) == 0)
+    return -1;
+
+  uint64 unstart, unlen;
+  uint64 start = a->start;
+  uint64 offset = a->offset;
+  uint64 orilen = a->end - a->start;
+
+  if(addr == a->start){ // Unmap from head
+    unstart = addr;
+    // Avoid caller input a very big length
+    unlen = PGROUNDUP(length) < orilen ? PGROUNDUP(length) : orilen;
+
+    a->start = unstart + unlen;
+    a->offset += unlen;
+  } else if(addr + length >= a->end){ // Unmap from a ramdom addr till the end
+    unstart = addr;
+    unlen = a->end - unstart;
+
+    a->end = unstart;
+  } else { // Unmap whole single-vma
+    unstart = a->start;
+    unlen = a->end - a->start;
+  }
+
+  int i;
+  uint64 va;
+  for(i = 0; i < unlen / PGSIZE; i++){
+    va = unstart + (i*PGSIZE);
+    if(vm_exist(p->pagetable, va)){
+      if(a->flags & MAP_SHARED){
+        munmap_writeback(va, PGSIZE, start, offset, a);
+      }
+      uvmunmap(p->pagetable, va, 1, 1);
+    }
+  }
+
+  if(unlen == orilen){
+    fileclose(a->file);
+    a->used = 0;
+  }
+
+  return 0;
 }
