@@ -113,17 +113,32 @@ printf(char *fmt, ...)
   if(locking)
     release(&pr.lock);
 }
+
 void
 backtrace(char* s)
 {
-  uint64 fp = r_fp();
+  uint64 ra, fp, pre_fp;
+
   printf("backtrace: ");
-  printf(s);
+  printf("%s", s);
   printf("\n");
 
-  // if still in same page, goto previous stack frame
-  for(; PGROUNDDOWN(fp) < PGROUNDUP(fp); fp = *((uint64*)(fp - 16)))
-    printf("%p\n", *((uint64*)(fp - 8))); // print return address
+  fp = r_fp();
+  pre_fp = (*(uint64*)(fp-16));
+
+  // If fp and pre_fp still in the same page
+  // Why they must in the SAME PAGE?
+  // Because in xv6, user stack is PGSIZE
+  // if still in same page, meaning still in same process
+  // Unless will have error, like visited illegal/guard page
+  while(PGROUNDDOWN(fp) == PGROUNDDOWN(pre_fp)){
+    ra = (*(uint64*)(fp-8));
+    printf("%p\n", ra);
+    fp = pre_fp;
+    pre_fp = (*(uint64*)(fp-16));
+  }
+  ra = (*(uint64*)(fp-8));
+  printf("%p\n", ra);
 }
 
 void
