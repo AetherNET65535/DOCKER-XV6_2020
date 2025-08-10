@@ -306,28 +306,28 @@ sys_open(void)
       end_op();
       return -1;
     }
-  } else {
-    if(omode & O_NOFOLLOW){
-      if((ip = namei(path)) == 0){
-        end_op();
-        return -1;
-      }
-    } else {
-      char rpath[MAXPATH];
-      if((ip = find_symlink(path, rpath, 0)) == 0){
-        end_op();
-        return -1;
-      }
-    }
-    
-    ilock(ip);
-    if(ip->type == T_DIR && omode != O_RDONLY){
-      iunlockput(ip);
+    goto general;
+  } else if(omode & O_NOFOLLOW) {
+    if((ip = namei(path)) == 0){
       end_op();
       return -1;
     }
+  } else {
+    char rpath[MAXPATH];
+    if((ip = find_symlink(path, rpath, 0)) == 0){
+      end_op();
+      return -1;
+    }
+  } 
+
+  ilock(ip);
+  if(ip->type == T_DIR && omode != O_RDONLY){
+    iunlockput(ip);
+    end_op();
+    return -1;
   }
 
+general:
   if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){
     iunlockput(ip);
     end_op();
@@ -500,15 +500,15 @@ sys_pipe(void)
 uint64
 sys_symlink(void)
 {
-  char tgt[MAXPATH], new[MAXPATH];
+  char target[MAXPATH], linkpath[MAXPATH];
   uint len;
   struct inode *op, *ip;
 
-  if(argstr(0, tgt, MAXPATH) < 0 || argstr(1, new, MAXPATH) < 0)
+  if(argstr(0, target, MAXPATH) < 0 || argstr(1, linkpath, MAXPATH) < 0)
     return -1;
 
   begin_op();
-  if((op = namei(tgt)) != 0){
+  if((op = namei(target)) != 0){
     ilock(op);
     if(op->type == T_DIR){
       iunlockput(op);
@@ -518,13 +518,13 @@ sys_symlink(void)
     iunlockput(op);
   }
 
-  if((ip = create(new, T_SYMLINK, 0, 0)) == 0){
+  if((ip = create(linkpath, T_SYMLINK, 0, 0)) == 0){
     end_op();
     return -1;
   }
 
-  len = strlen(tgt)+1;
-  if(writei(ip, 0, (uint64)tgt, 0, len) != len){
+  len = strlen(target)+1;
+  if(writei(ip, 0, (uint64)target, 0, len) != len){
     iunlockput(ip);
     end_op();
     return -1;
@@ -540,7 +540,7 @@ sys_symlink(void)
 struct inode*
 find_symlink(char *path, char *rpath, int depth)
 {
-  if(depth >= 10)
+  if(depth >= SYMDEPTH)
     return 0;
 
   struct inode *ip;
