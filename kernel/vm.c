@@ -450,6 +450,28 @@ vma_exist(uint64 addr, struct proc *p)
   return a;
 }
 
+// You may wondering, what diffrent between vm_exist() and walk(..,..,0)
+// The answer is
+// vm_exist() result is if L0 PTE(Leaf PTE) point to a pagetable
+// like, if L0 PTE point to a real data
+int
+pte_valid(pagetable_t pagetable, uint64 va)
+{
+  pte_t *pte = walk(pagetable, va, 0);
+  if((*pte & PTE_V) != 0)
+    return 1;
+  return 0;
+}
+
+int
+pte_dirty(pagetable_t pagetable, uint64 va)
+{
+  pte_t *pte = walk(pagetable, va, 0);
+  if((*pte & PTE_D) != 0)
+    return 1;
+  return 0;
+}
+
 int
 mmap_pgfault(uint64 stval, struct proc *p)
 {
@@ -492,19 +514,6 @@ mmap_pgfault(uint64 stval, struct proc *p)
   }
   iunlock(ip);
 
-  return 0;
-}
-
-// You may wondering, what diffrent between vm_exist() and walk(..,..,0)
-// The answer is
-// vm_exist() result is if L0 PTE(Leaf PTE) point to a pagetable
-// like, if L0 PTE point to a real data
-int
-vm_exist(pagetable_t pagetable, uint64 va)
-{
-  pte_t *pte = walk(pagetable, va, 0);
-  if((*pte & PTE_V) != 0)
-    return 1;
   return 0;
 }
 
@@ -584,8 +593,8 @@ munmap(uint64 addr, int length)
   uint64 va;
   for(i = 0; i < unlen / PGSIZE; i++){
     va = unstart + (i*PGSIZE);
-    if(vm_exist(p->pagetable, va)){
-      if(a->flags & MAP_SHARED){
+    if(pte_valid(p->pagetable, va)){
+      if(pte_dirty(p->pagetable, va) && a->flags & MAP_SHARED){
         munmap_writeback(va, PGSIZE, start, offset, a);
       }
       uvmunmap(p->pagetable, va, 1, 1);
