@@ -530,26 +530,28 @@ sys_mmap(void)
   // Find the smallest unused address
   uint64 next_start = addr == 0 ? VMA_BASE : addr;
   uint64 next_end = next_start + length;
-  
-  while(next_end < TRAPFRAME){
-    int overlap = 0;
-    for(i = 0; i < NVMA; i++){
-      if(!(p->vma[i].used))
-        continue;
-      while(p->vma[i].start <= next_start && next_start < p->vma[i].end){
-        overlap = 1;
-        next_start += PGSIZE;
-        next_end = next_start + length;
+  int autoaddr = (addr == 0);
+ 
+  if(autoaddr){
+    while(next_end < TRAPFRAME){
+      int overlap = 0;
+      for(i = 0; i < NVMA; i++){
+        if(!(p->vma[i].used))
+          continue;
+        while((p->vma[i].start <= next_start && next_start < p->vma[i].end) || 
+              (next_start <= p->vma[i].start && next_end <= p->vma[i].end)){
+          overlap = 1;
+          next_start += PGSIZE;
+          next_end = next_start + length;
+        }
       }
+      if(!overlap)
+        break;
     }
-    if(!overlap)
-      break;
   }
-  if(next_end >= TRAPFRAME)
-    return -1;
-  
+
   // Avoid mmap fitted trapframe region
-  if(next_start + length >= TRAPFRAME)
+  if(next_end >= TRAPFRAME)
     return -1;
 
   // Init
