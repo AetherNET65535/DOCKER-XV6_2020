@@ -538,8 +538,12 @@ sys_mmap(void)
       for(i = 0; i < NVMA; i++){
         if(!(p->vma[i].used))
           continue;
-        while((p->vma[i].start <= next_start && next_start < p->vma[i].end) || 
-              (next_start <= p->vma[i].start && next_end <= p->vma[i].end)){
+        while(1){
+          if(next_start < p->vma[i].start && next_end < p->vma[i].start)
+            break;
+          if(p->vma[i].end < next_start && p->vma[i].end < next_end)
+            break;
+
           overlap = 1;
           next_start += PGSIZE;
           next_end = next_start + length;

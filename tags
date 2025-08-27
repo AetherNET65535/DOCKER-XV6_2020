@@ -311,6 +311,7 @@ PROT_NONE	kernel/fcntl.h	/^#define PROT_NONE /;"	d
 PROT_READ	kernel/fcntl.h	/^#define PROT_READ /;"	d
 PROT_WRITE	kernel/fcntl.h	/^#define PROT_WRITE /;"	d
 PTE2PA	kernel/riscv.h	/^#define PTE2PA(/;"	d
+PTE_D	kernel/riscv.h	/^#define PTE_D /;"	d
 PTE_FLAGS	kernel/riscv.h	/^#define PTE_FLAGS(/;"	d
 PTE_R	kernel/riscv.h	/^#define PTE_R /;"	d
 PTE_U	kernel/riscv.h	/^#define PTE_U /;"	d
@@ -4511,7 +4512,7 @@ mmap	user/wc.asm	/^.global mmap$/;"	s
 mmap	user/wc.asm	/^mmap:$/;"	l
 mmap	user/zombie.asm	/^.global mmap$/;"	s
 mmap	user/zombie.asm	/^mmap:$/;"	l
-mmap_pgfault	kernel/vm.c	/^mmap_pgfault(uint64 stval, struct proc *p, int rw)$/;"	f	typeref:typename:int
+mmap_pgfault	kernel/vm.c	/^mmap_pgfault(uint64 stval, struct proc *p)$/;"	f	typeref:typename:int
 mmap_test	user/mmaptest.c	/^mmap_test(void)$/;"	f	typeref:typename:void
 mode	user/sh.c	/^  int mode;$/;"	m	struct:redircmd	typeref:typename:int	file:
 month	kernel/date.h	/^  uint month;$/;"	m	struct:rtcdate	typeref:typename:uint
@@ -4753,7 +4754,7 @@ os	user/usertests.asm	/^  os = s;$/;"	d
 os	user/wc.asm	/^  os = s;$/;"	d
 os	user/zombie.asm	/^  os = s;$/;"	d
 outstanding	kernel/log.c	/^  int outstanding; \/\/ how many FS sys calls are executing.$/;"	m	struct:log	typeref:typename:int	file:
-overlap	kernel/kernel.asm	/^        overlap = 1;$/;"	d
+overlap	kernel/kernel.asm	/^          overlap = 1;$/;"	d
 p	kernel/kernel.asm	/^  p = (char*)PGROUNDUP((uint64)pa_start);$/;"	d
 p	kernel/kernel.asm	/^  p = allocproc();$/;"	d
 p	kernel/kernel.asm	/^  p = myproc();$/;"	d
@@ -4781,7 +4782,6 @@ p	user/wc.asm	/^  p = sbrk(nu * sizeof(Header));$/;"	d
 p	user/zombie.asm	/^  p = sbrk(nu * sizeof(Header));$/;"	d
 pa	kernel/kernel.asm	/^    pa = PTE2PA(*pte);$/;"	d
 pa	kernel/kernel.asm	/^    pa = walkaddr(pagetable, va + i);$/;"	d
-pa	kernel/kernel.asm	/^  pa = (char*)PTE2PA(*pte);$/;"	d
 pa	kernel/kernel.asm	/^  pa = PTE2PA(*pte);$/;"	d
 pa0	kernel/kernel.asm	/^    pa0 = walkaddr(pagetable, va0);$/;"	d
 paddr	kernel/elf.h	/^  uint64 paddr;$/;"	m	struct:proghdr	typeref:typename:uint64
@@ -4902,8 +4902,10 @@ procinit	kernel/proc.c	/^procinit(void)$/;"	f	typeref:typename:void
 procstate	kernel/proc.h	/^enum procstate { UNUSED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };$/;"	g
 proghdr	kernel/elf.h	/^struct proghdr {$/;"	s
 pte	kernel/kernel.asm	/^  pte = walk(pagetable, va, 0);$/;"	d
+pte_dirty	kernel/vm.c	/^pte_dirty(pagetable_t pagetable, uint64 va)$/;"	f	typeref:typename:int
 pte_t	kernel/kernel.asm	/^pte_t *$/;"	l
 pte_t	kernel/riscv.h	/^typedef uint64 pte_t;$/;"	t	typeref:typename:uint64
+pte_valid	kernel/vm.c	/^pte_valid(pagetable_t pagetable, uint64 va)$/;"	f	typeref:typename:int
 ptr	user/umalloc.c	/^    union header *ptr;$/;"	m	struct:header::__anon3d351ad10108	typeref:union:header *	file:
 push_off	kernel/spinlock.c	/^push_off(void)$/;"	f	typeref:typename:void
 putc	user/printf.c	/^putc(int fd, char c)$/;"	f	typeref:typename:void	file:
@@ -5631,8 +5633,6 @@ virtq_avail	kernel/virtio.h	/^struct virtq_avail {$/;"	s
 virtq_desc	kernel/virtio.h	/^struct virtq_desc {$/;"	s
 virtq_used	kernel/virtio.h	/^struct virtq_used {$/;"	s
 virtq_used_elem	kernel/virtio.h	/^struct virtq_used_elem {$/;"	s
-vm_dirty	kernel/vm.c	/^vm_dirty(pagetable_t pagetable, uint64 va)$/;"	f	typeref:typename:int
-vm_exist	kernel/vm.c	/^vm_exist(pagetable_t pagetable, uint64 va)$/;"	f	typeref:typename:int
 vma	kernel/proc.h	/^  struct vma vma[NVMA];        \/\/ Virtual memory area$/;"	m	struct:proc	typeref:struct:vma[]
 vma	kernel/proc.h	/^struct vma{$/;"	s
 vma_exist	kernel/vm.c	/^vma_exist(uint64 addr, struct proc *p)$/;"	f	typeref:struct:vma *
