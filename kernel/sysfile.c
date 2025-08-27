@@ -532,26 +532,26 @@ sys_mmap(void)
   uint64 next_end = next_start + length;
   int autoaddr = (addr == 0);
  
-  if(autoaddr){
-    while(next_end < TRAPFRAME){
-      int overlap = 0;
-      for(i = 0; i < NVMA; i++){
-        if(!(p->vma[i].used))
-          continue;
-        while(1){
-          if(next_start < p->vma[i].start && next_end < p->vma[i].start)
-            break;
-          if(p->vma[i].end < next_start && p->vma[i].end < next_end)
-            break;
+  while(next_end < TRAPFRAME){
+    int overlap = 0;
+    for(i = 0; i < NVMA; i++){
+      if(!(p->vma[i].used))
+        continue;
+      while(1){
+        if(next_start < p->vma[i].start && next_end < p->vma[i].start)
+          break;
+        if(p->vma[i].end < next_start && p->vma[i].end < next_end)
+          break;
+        if(!autoaddr)
+          return -1;
 
-          overlap = 1;
-          next_start += PGSIZE;
-          next_end = next_start + length;
-        }
+        overlap = 1;
+        next_start += PGSIZE;
+        next_end = next_start + length;
       }
-      if(!overlap)
-        break;
     }
+    if(!overlap)
+      break;
   }
 
   // Avoid mmap fitted trapframe region
