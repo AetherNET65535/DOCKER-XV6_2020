@@ -562,7 +562,9 @@ munmap(uint64 addr, int length)
 {
   struct proc *p = myproc();
   struct vma *a = 0;
-  addr = PGROUNDDOWN(addr);
+
+  if(addr % PGSIZE != 0)
+    return -1;
 
   if((a = vma_exist(addr, p)) == 0)
     return -1;
