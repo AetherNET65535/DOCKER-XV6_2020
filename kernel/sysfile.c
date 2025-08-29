@@ -503,16 +503,12 @@ sys_mmap(void)
      argint(5, &offset) < 0)
     return -1;
 
-  length = PGROUNDUP(length);
-
   // Error check
   if(addr != 0 && addr < VMA_BASE)
     return -1;
   if(addr != 0 && addr > TRAPFRAME)
     return -1;
   if(addr != 0 && addr % PGSIZE != 0)
-    return -1;
-  if(file->ip->size - offset > length)
     return -1;
   if((flags & MAP_SHARED) && !file->writable && (prot & PROT_WRITE))
     return -1;
@@ -529,7 +525,7 @@ sys_mmap(void)
 
   // Find the smallest unused address
   uint64 next_start = addr == 0 ? VMA_BASE : addr;
-  uint64 next_end = next_start + length;
+  uint64 next_end = PGROUNDUP(next_start + length);
   int autoaddr = (addr == 0);
  
   while(next_end < TRAPFRAME){
@@ -547,7 +543,7 @@ sys_mmap(void)
 
         overlap = 1;
         next_start += PGSIZE;
-        next_end = next_start + length;
+        next_end = PGROUNDUP(next_start + length);
       }
     }
     if(!overlap)
@@ -581,5 +577,5 @@ sys_munmap(void)
   if(argaddr(0, &addr) || argint(1, &length))
     return -1;
 
-  return munmap(addr, length);
+  return __munmap(addr, length);
 }

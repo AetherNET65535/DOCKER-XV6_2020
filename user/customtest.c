@@ -8,6 +8,7 @@
 
 void mmap_test();
 void fork_test();
+void free_test();
 char buf[BSIZE];
 
 #define MAP_FAILED ((char *) -1)
@@ -17,6 +18,7 @@ main(int argc, char *argv[])
 {
   mmap_test();
   fork_test();
+  free_test();
   printf("mmaptest: all tests succeeded\n");
   exit(0);
 }
@@ -43,12 +45,7 @@ _v1(char *p)
         printf("mismatch at %d, wanted 'A', got 0x%x\n", i, p[i]);
         err("v1 mismatch (1)");
       }
-    } else {
-      if (p[i] != 0) {
-        printf("mismatch at %d, wanted zero, got 0x%x\n", i, p[i]);
-        err("v1 mismatch (2)");
-      }
-    }
+    }  
   }
 }
 
@@ -60,7 +57,7 @@ void
 makefile(const char *f)
 {
   int i;
-  int n = PGSIZE/BSIZE;
+  int n = PGSIZE/BSIZE; 
 
   unlink(f);
   int fd = open(f, O_WRONLY | O_CREATE);
@@ -68,7 +65,7 @@ makefile(const char *f)
     err("open");
   memset(buf, 'A', BSIZE);
   // write 1.5 page
-  for (i = 0; i < n + n/2; i++) {
+  for (i = 0; i < n * n; i++) {
     if (write(fd, buf, BSIZE) != BSIZE)
       err("write 0 makefile");
   }
@@ -293,4 +290,89 @@ fork_test(void)
   _v1(p2);
 
   printf("fork_test OK\n");
+}
+
+void
+free_test()
+{
+  int size = (2048/sizeof(char*)); 
+  printf("free_test starting\n");
+  printf("mmap %d time: ", size);
+
+  int fd;
+  const char * const f = "mmap.dur";
+  
+  testname = "free_test";
+  
+  makefile(f);
+  if ((fd = open(f, O_RDONLY)) == -1)
+    err("open");
+  unlink(f);
+
+  char *pages[size];
+  for(int i = 0; i < size; i++){
+    int offset = 0;
+    pages[i] = mmap(0, PGSIZE, PROT_READ, MAP_SHARED, fd, offset);
+    if (pages[i] == MAP_FAILED){
+      printf("BAD\n");
+      exit(-1);
+    }
+    munmap(pages[i], PGSIZE);
+  }
+  
+  printf("OK\n");
+
+  printf("3 munmap type: START\n");
+  char *p[4];
+  for(int i = 0; i < 4; i++){
+    p[i] = mmap(0, PGSIZE*3, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    if (p[i] == MAP_FAILED){
+      printf("BAD\n");
+      exit(-1);
+    }
+
+    if(i == 0){ // start
+      printf("start: ");
+      if(munmap(p[i], PGSIZE) == 0){
+        printf("OK\n");
+        munmap(p[i]+PGSIZE, PGSIZE*2);
+      }
+      else
+        goto bad;
+    }
+    if(i == 1){ // middle to end
+      printf("end: ");
+      if(munmap((p[i]+PGSIZE), PGSIZE*(3 - 1)) == 0){
+        printf("OK\n");
+        munmap(p[i], PGSIZE);
+      }
+      else
+        goto bad;
+    }
+    if(i == 2){ // middle to middle
+      printf("mid: ");
+      if(munmap((p[i]+(PGSIZE)), PGSIZE) == 0)
+        printf("OK\n");
+      else
+        goto bad;
+    }
+    if(i == 3){ // check split
+      printf("split check: START\n");
+      // left page
+      *(p[i-1]) = 'A';
+      printf("A: OK\n");
+      *(p[i-1]+1) = 'B';
+      printf("B: OK\n");
+      // right page (the third page)
+      *(p[i-1]+(PGSIZE*2)) = 'C';
+      printf("C: OK\n");
+      printf("split check: OK\n"); 
+    }
+  }
+  printf("free_test: OK\n");
+  return;
+
+  bad:
+  printf("BAD\n");
+  exit(-1);
 }

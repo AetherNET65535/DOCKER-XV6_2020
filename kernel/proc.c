@@ -371,7 +371,7 @@ exit(int status)
   for(int i = 0; i < NVMA; i++){
     if(p->vma[i].used){
       int length = p->vma[i].end - p->vma[i].start;
-      munmap(p->vma[i].start, length);
+      __munmap(p->vma[i].start, length);
       p->vma[i].used = 0;
     }
   }

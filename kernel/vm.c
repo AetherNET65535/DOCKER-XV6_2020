@@ -436,18 +436,29 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 }
 
 struct vma*
-vma_exist(uint64 addr, struct proc *p)
+find_vma(uint64 addr, struct proc *p)
 {
   int i;
-  struct vma *a = 0;
+  struct vma *v = 0;
 
   for(i = 0; i < NVMA; i++){
     if(p->vma[i].used && addr >= p->vma[i].start && addr < p->vma[i].end){
-      a = &p->vma[i];
-      break;
+      return &p->vma[i];
     }
   }
-  return a;
+  return v;
+}
+
+struct vma*
+unused_vma(uint64 addr, struct proc *p)
+{
+  struct vma *v = 0;
+
+  for(int i = 0; i < NVMA; i++){
+    if(p->vma[i].used == 0)
+      return &p->vma[i];
+  }
+  return v;
 }
 
 // You may wondering, what diffrent between vm_exist() and walk(..,..,0)
@@ -483,7 +494,7 @@ mmap_pgfault(uint64 stval, struct proc *p)
   stval = PGROUNDDOWN(stval);
 
   // Find which vma using this address
-  if((a = vma_exist(stval, p)) == 0)
+  if((a = find_vma(stval, p)) == 0)
     return -1;
 
   if((pa = kalloc()) == 0)
@@ -557,56 +568,156 @@ munmap_writeback(uint64 unstart, uint64 unlen, uint64 start, uint64 offset, stru
   return ret;
 }
 
+int __munmap(uint64 addr, int length);
+int munmap(struct proc *p, struct vma *v, uint64 unstart, uint64 unlen);
+int munmap_start(struct proc *p, struct vma *v, uint64 addr, int length);
+int munmap_end(struct proc *p, struct vma *v, uint64 addr, uint64 length);
+int munmap_split(struct proc *p, struct vma *v, uint64 addr, uint64 length);
+void free_vma(struct vma *v);
+
 int
-munmap(uint64 addr, int length)
+__munmap(uint64 addr, int length)
 {
   struct proc *p = myproc();
-  struct vma *a = 0;
+  struct vma *v = 0;
+  uint64 unlen;
 
   if(addr % PGSIZE != 0)
     return -1;
 
-  if((a = vma_exist(addr, p)) == 0)
+  length = PGROUNDUP(length);
+
+  if(addr + length < addr)
     return -1;
 
-  uint64 unstart, unlen;
-  uint64 start = a->start;
-  uint64 offset = a->offset;
-  uint64 orilen = a->end - a->start;
+  if((v = find_vma(addr, p)) == 0)
+    return -1;
+  uint64 orilen = v->end - v->start;
 
-  if(addr == a->start){ // Unmap from head
-    unstart = addr;
-    // Avoid caller input a very big length
-    unlen = PGROUNDUP(length) < orilen ? PGROUNDUP(length) : orilen;
-
-    a->start = unstart + unlen;
-    a->offset += unlen;
-  } else if(addr + length >= a->end){ // Unmap from a ramdom addr till the end
-    unstart = addr;
-    unlen = a->end - unstart;
-
-    a->end = unstart;
-  } else { // Unmap whole single-vma
-    unstart = a->start;
-    unlen = a->end - a->start;
+  if(addr == v->start){                                 // unmap from start to middle or end
+    if((unlen = munmap_start(p, v, addr, length)) == -1)
+      return -1;
   }
-
-  int i;
-  uint64 va;
-  for(i = 0; i < unlen / PGSIZE; i++){
-    va = unstart + (i*PGSIZE);
-    if(pte_valid(p->pagetable, va)){
-      if(pte_dirty(p->pagetable, va) && a->flags & MAP_SHARED){
-        munmap_writeback(va, PGSIZE, start, offset, a);
-      }
-      uvmunmap(p->pagetable, va, 1, 1);
-    }
+  else if(addr + length == v->end){                     // unmap from middle to end
+    if((unlen = munmap_end(p, v, addr, length)) == -1)
+      return -1;
   }
-
-  if(unlen == orilen){
-    fileclose(a->file);
-    a->used = 0;
+  else if(addr > v->start && addr + length < v->end){   // unmap from middle to middle
+    if((unlen = munmap_split(p, v, addr, length)) == -1)
+      return -1;
   }
+  else
+    return -1;
+
+  if(orilen == unlen)
+    free_vma(v);
 
   return 0;
 }
+
+int
+munmap(struct proc *p, struct vma *v, uint64 unstart, uint64 unlen)
+{
+  uint64 va;
+
+  uint64 start = v->start;
+  uint64 offset = v->offset;
+
+  for(int i = 0; i < unlen / PGSIZE; i++){
+    va = unstart + (i*PGSIZE);
+    if(pte_valid(p->pagetable, va)){
+      if(pte_dirty(p->pagetable, va) && v->flags & MAP_SHARED)
+        munmap_writeback(va, PGSIZE, start, offset, v);
+      uvmunmap(p->pagetable, va, 1, 1);
+    }
+  }
+  return 0;
+}
+
+int
+munmap_start(struct proc *p, struct vma *v, uint64 addr, int length)
+{
+  uint64 orilen = v->end - v->start;
+
+  uint64 unstart = addr;
+  uint64 unlen = PGROUNDUP(length) < orilen ? PGROUNDUP(length) : orilen;
+
+  v->start = unstart + unlen;
+  v->offset += unlen;
+
+  if(munmap(p, v, unstart, unlen) != 0)
+    return -1;
+
+/*
+  printf("START start: %p\n", (void*)v->start);
+  printf("START offset: %d\n", v->offset);
+*/
+
+  return unlen;
+}
+
+int
+munmap_end(struct proc *p, struct vma *v, uint64 addr, uint64 length)
+{
+  uint64 unstart = addr;
+  uint64 unlen = v->end - unstart;
+
+  v->end = unstart;
+
+  if(munmap(p, v, unstart, unlen) != 0)
+    return -1;
+
+  /*
+  printf("END end: %p\n", (void*)v->end);
+  */
+
+  return unlen;
+}
+
+int
+munmap_split(struct proc *p, struct vma *v, uint64 addr, uint64 length)
+{
+  struct vma *nv = 0;
+  if((nv = unused_vma(addr, p)) == 0)
+    return -1;
+
+  uint64 unstart = addr;
+  uint64 unlen = length;
+
+  uint64 new_start = PGROUNDUP(unstart + unlen);
+
+  nv->start = new_start;
+  nv->end = v->end;
+  nv->file = v->file;
+  nv->flags = v->flags;
+  nv->offset = v->offset + (nv->start - v->start);
+  nv->permission = v->permission;
+  nv->used = 1;
+
+  if(munmap(p, v, unstart, unlen) != 0){
+    free_vma(nv);
+    return -1;
+  }
+
+  v->end = unstart;
+
+  filedup(v->file);
+
+  return unlen;
+}
+
+void
+free_vma(struct vma *v)
+{
+  if(v->file) 
+    fileclose(v->file);
+
+  v->start = 0;
+  v->end = 0;
+  v->file = 0;
+  v->flags = 0;
+  v->offset = 0;
+  v->permission = 0;
+  v->used = 0;
+}
+
