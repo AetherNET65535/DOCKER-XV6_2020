@@ -648,11 +648,6 @@ munmap_start(struct proc *p, struct vma *v, uint64 addr, int length)
   if(munmap(p, v, unstart, unlen) != 0)
     return -1;
 
-/*
-  printf("START start: %p\n", (void*)v->start);
-  printf("START offset: %d\n", v->offset);
-*/
-
   return unlen;
 }
 
@@ -666,10 +661,6 @@ munmap_end(struct proc *p, struct vma *v, uint64 addr, uint64 length)
 
   if(munmap(p, v, unstart, unlen) != 0)
     return -1;
-
-  /*
-  printf("END end: %p\n", (void*)v->end);
-  */
 
   return unlen;
 }

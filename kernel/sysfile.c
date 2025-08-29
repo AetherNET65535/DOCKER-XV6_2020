@@ -512,6 +512,8 @@ sys_mmap(void)
     return -1;
   if((flags & MAP_SHARED) && !file->writable && (prot & PROT_WRITE))
     return -1;
+  if(!file->readable && (prot & PROT_READ))
+    return -1;
 
   // Find the unused vma structure
   int i;
