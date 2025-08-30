@@ -119,10 +119,10 @@ e1000_transmit(struct mbuf *m)
 
   // init and settings
   memset(&tx_ring[tail], 0, sizeof(struct tx_desc));
-  tx_ring[tail].cmd = E1000_TXD_CMD_EOP | E1000_TXD_CMD_RS;
   tx_ring[tail].addr = (uint64)m->head;
   tx_ring[tail].length = m->len;
   tx_mbufs[tail] = m;
+  tx_ring[tail].cmd = E1000_TXD_CMD_EOP | E1000_TXD_CMD_RS;
 
   // regs[E1000_TDT]++ but more cool, you can try it yourself
   // it like a ring
