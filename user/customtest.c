@@ -357,7 +357,7 @@ free_test()
         goto bad;
     }
     if(i == 3){ // check split
-      printf("split check: START\n");
+      printf("write test: START\n");
       // left page
       *(p[i-1]) = 'A';
       printf("A: OK\n");
@@ -366,7 +366,22 @@ free_test()
       // right page (the third page)
       *(p[i-1]+(PGSIZE*2)) = 'C';
       printf("C: OK\n");
-      printf("split check: OK\n"); 
+      printf("write test: OK\n"); 
+
+      printf("split check: START\n");
+      if(*(p[i-1]) == 'A')
+        printf("A: OK\n");
+      else
+        goto bad;
+      if(*(p[i-1]+1) == 'B')
+        printf("B: OK\n");
+      else
+        goto bad;
+      if(*(p[i-1]+(PGSIZE*2)) == 'C')
+        printf("C: OK\n");
+      else
+        goto bad;
+      printf("split check: OK\n");
     }
   }
   printf("free_test: OK\n");
